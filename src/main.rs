@@ -5,6 +5,8 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
+use regex::Regex;
+use regex::escape;
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -18,7 +20,13 @@ struct Cli {
 
     // string to search
     #[arg(short, long)]
-    search: Option<String>,
+    search: Option<String>
+
+}
+
+struct HistoryItem{
+    command: String,
+    timestamp: i64
 }
 
 fn main() -> io::Result<()> {
@@ -43,10 +51,20 @@ fn main() -> io::Result<()> {
         .filter_map(|line: Result<String, io::Error>| match line {
             Ok(bytes) => {
                 line_number += 1;
-                Some(String::from_utf8_lossy(bytes.as_bytes()).into_owned())
+                let byte_string_literal: &[u8] = bytes.as_bytes();
+                let line = String::from_utf8_lossy(byte_string_literal).into_owned();
+                let escaped_s = escape(args.search.as_ref().unwrap().as_str());
+                let pattern = format!("\\b{}\\b", escaped_s);
+                let regex = Regex::new(&pattern).unwrap();
+
+                if let Some(caps) = regex.captures(&line){
+                    Some(line)
+                } else {
+                    None
+                }
             }
             Err(e) => {
-                eprintln!("Error reading line number {}: {}", line_number, e);
+                // eprintln!("Error reading line number {}: {}", line_number, e);
                 line_number += 1;
                 None
             }
@@ -83,4 +101,12 @@ fn get_history_file_path() -> Option<std::path::PathBuf> {
         println!("Unsupported shell: {}", shell);
         None
     }
+}
+fn go(){
+    let re = Regex::new(r"Hello (?<name>\w+)!").unwrap();
+    let Some(caps) = re.captures("Hello Murphy!") else {
+        println!("no match!");
+        return;
+    };
+    println!("The name is: {}", &caps["name"]);
 }
