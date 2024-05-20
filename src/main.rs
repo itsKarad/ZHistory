@@ -57,13 +57,13 @@ fn main() -> io::Result<()> {
                 let pattern = format!("\\b{}\\b", escaped_s);
                 let regex = Regex::new(&pattern).unwrap();
 
-                if let Some(caps) = regex.captures(&line){
+                if let Some(..) = regex.captures(&line){
                     Some(line)
                 } else {
                     None
                 }
             }
-            Err(e) => {
+            Err(..) => {
                 // eprintln!("Error reading line number {}: {}", line_number, e);
                 line_number += 1;
                 None
@@ -101,12 +101,4 @@ fn get_history_file_path() -> Option<std::path::PathBuf> {
         println!("Unsupported shell: {}", shell);
         None
     }
-}
-fn go(){
-    let re = Regex::new(r"Hello (?<name>\w+)!").unwrap();
-    let Some(caps) = re.captures("Hello Murphy!") else {
-        println!("no match!");
-        return;
-    };
-    println!("The name is: {}", &caps["name"]);
 }
