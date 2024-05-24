@@ -1,33 +1,41 @@
+use chrono::Local;
 use clap::Parser;
 use dirs::home_dir;
+use regex::escape;
+use regex::Regex;
 use std::cmp::min;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
-use regex::Regex;
-use regex::escape;
 
 /// Simple program to greet a person
 #[derive(Parser)]
-#[command(name = "greeter")]
+#[command(name = "zhistory")]
 #[command(version = "1.0")]
-#[command(about = "Says hello to a person", long_about = None)]
+#[command(about = "Command line history tool", long_about = None)]
 struct Cli {
     // number of lines to read
     #[arg(short, long, default_value = "5")]
     lines: usize,
 
     // string to search
-    #[arg(short, long)]
-    search: Option<String>
+    #[arg(short, long, default_value = "")]
+    search: Option<String>,
 
+    // take history upto a day
+    #[arg(long, default_value = "false")]
+    day: bool,
+
+    // take history upto a month
+    #[arg(long, default_value = "false")]
+    month: bool,
 }
 
-struct HistoryItem{
-    command: String,
-    timestamp: i64
-}
+// struct HistoryItem {
+//     command: String,
+//     timestamp: i64,
+// }
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
@@ -48,27 +56,7 @@ fn main() -> io::Result<()> {
     let mut line_number = 1;
     let mut lines: Vec<String> = reader
         .lines()
-        .filter_map(|line: Result<String, io::Error>| match line {
-            Ok(bytes) => {
-                line_number += 1;
-                let byte_string_literal: &[u8] = bytes.as_bytes();
-                let line = String::from_utf8_lossy(byte_string_literal).into_owned();
-                let escaped_s = escape(args.search.as_ref().unwrap().as_str());
-                let pattern = format!("\\b{}\\b", escaped_s);
-                let regex = Regex::new(&pattern).unwrap();
-
-                if let Some(..) = regex.captures(&line){
-                    Some(line)
-                } else {
-                    None
-                }
-            }
-            Err(..) => {
-                // eprintln!("Error reading line number {}: {}", line_number, e);
-                line_number += 1;
-                None
-            }
-        })
+        .filter_map(|line_result| process_line(line_result, &args, &mut line_number))
         .collect();
 
     // Get the specified number of lines from the end
@@ -100,5 +88,92 @@ fn get_history_file_path() -> Option<std::path::PathBuf> {
     } else {
         println!("Unsupported shell: {}", shell);
         None
+    }
+}
+
+// Check if the timestamp is within a day
+fn is_within_one_day(timestamp: i64) -> bool {
+    let current_time = Local::now().timestamp();
+    let one_day_ago = current_time - 24 * 3600;
+    timestamp >= one_day_ago
+}
+
+// Check if the timestamp is within a month
+fn is_within_one_month(timestamp: i64) -> bool {
+    let current_time = Local::now().timestamp();
+    let one_month_ago = current_time - 30 * 24 * 3600;
+    let one_month_from_now = current_time + 30 * 24 * 3600;
+    timestamp >= one_month_ago && timestamp <= one_month_from_now
+}
+
+// Function to parse timestamp from a line
+fn parse_timestamp(line: &str) -> Option<i64> {
+    let parts: Vec<&str> = line.split(':').collect();
+    if let Some(timestamp_str) = parts.get(1) {
+        if let Ok(timestamp) = timestamp_str.trim().parse::<i64>() {
+            return Some(timestamp);
+        } else {
+            eprintln!("Error: Unable to parse timestamp");
+        }
+    } else {
+        eprintln!("Error: Timestamp not found in the input string");
+    }
+    None
+}
+
+// Function to match regex pattern on a line
+fn match_regex(line: &str, search: &Option<String>) -> bool {
+    if let Some(search_str) = search {
+        let escaped_s = escape(search_str);
+        let pattern = format!("\\b{}\\b", escaped_s);
+        if let Ok(regex) = Regex::new(&pattern) {
+            if regex.captures(line).is_some() {
+                return true;
+            }
+        } else {
+            eprintln!("Error: Invalid regex pattern");
+        }
+    }
+    false
+}
+
+fn process_line(
+    line_result: Result<String, io::Error>,
+    args: &Cli,
+    line_number: &mut usize,
+) -> Option<String> {
+    match line_result {
+        Ok(bytes) => {
+            *line_number += 1;
+            let line = String::from_utf8_lossy(bytes.as_bytes()).into_owned();
+
+            if match_regex(&line, &args.search) {
+                if let Some(timestamp) = parse_timestamp(&line) {
+                    // Parse the timestamp string to an integer
+                    if (args.day && is_within_one_day(timestamp))
+                        || (args.month && is_within_one_day(timestamp))
+                    {
+                        println!("Timestamp: {}", timestamp);
+                        return Some(line);
+                    } else if args.month && is_within_one_month(timestamp) {
+                        println!("Timestamp: {}", timestamp);
+                        return Some(line);
+                    } else if !args.day && !args.month {
+                        return Some(line);
+                    }
+                } else {
+                    eprintln!("Error: Timestamp not found in the input string");
+                }
+
+                Some(line)
+            } else {
+                None
+            }
+        }
+        Err(..) => {
+            // eprintln!("Error reading line number {}: {}", line_number, e);
+            *line_number += 1;
+            None
+        }
     }
 }
