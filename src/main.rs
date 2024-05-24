@@ -8,6 +8,8 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
+use std::string;
+use std::process::Command;
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -16,7 +18,7 @@ use std::path::PathBuf;
 #[command(about = "Command line history tool", long_about = None)]
 struct Cli {
     // number of lines to read
-    #[arg(short, long, default_value = "5")]
+    #[arg(short, long, default_value = "100")]
     lines: usize,
 
     // string to search
@@ -36,6 +38,7 @@ struct Cli {
 //     command: String,
 //     timestamp: i64,
 // }
+
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
@@ -64,16 +67,76 @@ fn main() -> io::Result<()> {
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
+    let mut last_lines: Vec<_> = last_lines
+    .into_iter()
+    .collect();
+
     last_lines.reverse();
 
     let mut i = 0;
 
     // Print the lines
-    for line in last_lines {
+    for line in &last_lines {
         println!("{}: {}", i, line);
         i += 1;
     }
 
+    while(true){
+        // take filter input
+        let mut filterQuery = String::new();
+        io::stdin()
+            .read_line(&mut filterQuery)
+            .expect("Failed to read line");
+
+        println!("Query received: {}", filterQuery);
+        if filterQuery.trim().to_lowercase() == "q" || filterQuery.trim().to_lowercase() == "exit" || filterQuery.trim().to_lowercase() == "quit" {
+            break;
+        }
+
+        if let Ok(parsed_int) = filterQuery.trim().parse::<i32>() {
+            // user selects a command to run
+            let parsed_uint: usize = parsed_int as usize;
+
+            
+            let entire_line = last_lines[parsed_uint].clone();
+            let parts: Vec<&str> = entire_line.split(';').collect();
+
+            if let Some(commmand_str) = parts.get(1) {
+                println!("You ran {}", commmand_str);
+                let output = Command::new(commmand_str)
+                                .arg("-l")
+                                .output()
+                                .expect("Failed to execute command");
+                if output.status.success() {
+                    let result = String::from_utf8_lossy(&output.stdout);
+                    println!("Command output:\n{}", result);
+                } else { //  gracefully handle error!
+                    let error = String::from_utf8_lossy(&output.stderr);
+                    println!("Error executing command:\n{}", error);
+                }
+                break;
+            } else {
+                eprintln!("Error: command not found in the input string");
+            }
+
+            
+
+            break;
+        } else {
+            // user filters from the list of commands
+            let re = Regex::new(r"(?i)Pass").unwrap(); // Replace Pass with filterQuery
+            // filter commands
+            last_lines.retain(|line| re.is_match(line));
+            
+            println!("{} Relevant results found:", last_lines.len());
+            for (index, line) in last_lines.iter().enumerate() {
+                println!("{}: {}", index, line);
+            }
+        }
+
+        
+    }
+    
     Ok(())
 }
 
