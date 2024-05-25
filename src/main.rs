@@ -113,7 +113,7 @@ fn main() -> io::Result<()> {
                 println!("📋 Copied into your clipboard!");
                 break;
             } else {
-                eprintln!("Error: command not found in the input string");
+                eprintln!("❌ Error: command not found in the input string");
             }
             break;
         } else {
@@ -125,8 +125,6 @@ fn main() -> io::Result<()> {
                 println!("{}: {}", index, line);
             }
         }
-
-        
     }
     
     Ok(())
