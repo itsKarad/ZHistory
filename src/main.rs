@@ -36,11 +36,17 @@ struct Cli {
     month: bool,
 }
 
-// struct HistoryItem {
-//     command: String,
-//     timestamp: i64,
-// }
-
+fn tokenize_and_filter(filter: &str, words: &mut Vec<&mut String>) {
+    let tokens: Vec<String> = filter.split_whitespace()
+        .map(|s| s.to_lowercase())
+        .collect();
+    
+    words.retain(|word| {
+        let lower_word = word.to_lowercase();
+        tokens.iter().any(|token| lower_word.contains(token))
+    });
+    
+}
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
@@ -112,10 +118,8 @@ fn main() -> io::Result<()> {
             break;
         } else {
             // user filters from the list of commands
-            let re = Regex::new(r"(?i)Pass").unwrap(); // Replace Pass with filterQuery
-            // filter commands
-            last_lines.retain(|line| re.is_match(line));
-            
+            tokenize_and_filter(&filterQuery, &mut last_lines);
+
             println!("{} Relevant results found:", last_lines.len());
             for (index, line) in last_lines.iter().enumerate() {
                 println!("{}: {}", index, line);
