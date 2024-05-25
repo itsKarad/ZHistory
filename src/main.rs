@@ -10,6 +10,8 @@ use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 use std::string;
 use std::process::Command;
+use clipboard::{ClipboardContext, ClipboardProvider};
+
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -96,31 +98,17 @@ fn main() -> io::Result<()> {
         if let Ok(parsed_int) = filterQuery.trim().parse::<i32>() {
             // user selects a command to run
             let parsed_uint: usize = parsed_int as usize;
-
-            
             let entire_line = last_lines[parsed_uint].clone();
             let parts: Vec<&str> = entire_line.split(';').collect();
 
             if let Some(commmand_str) = parts.get(1) {
-                println!("You ran {}", commmand_str);
-                let output = Command::new(commmand_str)
-                                .arg("-l")
-                                .output()
-                                .expect("Failed to execute command");
-                if output.status.success() {
-                    let result = String::from_utf8_lossy(&output.stdout);
-                    println!("Command output:\n{}", result);
-                } else { //  gracefully handle error!
-                    let error = String::from_utf8_lossy(&output.stderr);
-                    println!("Error executing command:\n{}", error);
-                }
+                let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+                ctx.set_contents(commmand_str.to_string()).unwrap();
+                println!("📋 Copied into your clipboard!");
                 break;
             } else {
                 eprintln!("Error: command not found in the input string");
             }
-
-            
-
             break;
         } else {
             // user filters from the list of commands
