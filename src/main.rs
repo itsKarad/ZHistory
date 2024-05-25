@@ -8,8 +8,6 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
-use std::string;
-use std::process::Command;
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 
