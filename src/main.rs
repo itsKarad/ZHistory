@@ -113,10 +113,10 @@ fn parse_timestamp(line: &str) -> Option<i64> {
         if let Ok(timestamp) = timestamp_str.trim().parse::<i64>() {
             return Some(timestamp);
         } else {
-            eprintln!("Error: Unable to parse timestamp");
+            // eprintln!("Error: Unable to parse timestamp");
         }
     } else {
-        eprintln!("Error: Timestamp not found in the input string");
+        // eprintln!("Error: Timestamp not found in the input string");
     }
     None
 }
@@ -153,16 +153,15 @@ fn process_line(
                     if (args.day && is_within_one_day(timestamp))
                         || (args.month && is_within_one_day(timestamp))
                     {
-                        println!("Timestamp: {}", timestamp);
                         return Some(line);
                     } else if args.month && is_within_one_month(timestamp) {
-                        println!("Timestamp: {}", timestamp);
                         return Some(line);
                     } else if !args.day && !args.month {
                         return Some(line);
                     }
                 } else {
-                    eprintln!("Error: Timestamp not found in the input string");
+                    // eprintln!("Error: Timestamp not found in the input string");
+                    return None;
                 }
 
                 Some(line)
