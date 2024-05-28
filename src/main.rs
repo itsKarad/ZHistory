@@ -91,8 +91,6 @@ fn main() -> io::Result<()> {
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
-    let mut last_lines: Vec<_> = last_lines.into_iter().collect();
-
     last_lines.reverse();
     if args.stats {
         let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
@@ -103,29 +101,29 @@ fn main() -> io::Result<()> {
         }
     } else {
         let mut i = 0;
-
+        let mut last_lines: Vec<_> = last_lines.into_iter().collect();
         // Print the lines
         for line in &last_lines {
             println!("{}: {}", i, line);
             i += 1;
         }
 
-        while (true) {
+        loop {
             // take filter input
-            let mut filterQuery = String::new();
+            let mut filter_query = String::new();
             io::stdin()
-                .read_line(&mut filterQuery)
+                .read_line(&mut filter_query)
                 .expect("Failed to read line");
 
-            println!("Query received: {}", filterQuery);
-            if filterQuery.trim().to_lowercase() == "q"
-                || filterQuery.trim().to_lowercase() == "exit"
-                || filterQuery.trim().to_lowercase() == "quit"
+            println!("Query received: {}", filter_query);
+            if filter_query.trim().to_lowercase() == "q"
+                || filter_query.trim().to_lowercase() == "exit"
+                || filter_query.trim().to_lowercase() == "quit"
             {
                 break;
             }
 
-            if let Ok(parsed_int) = filterQuery.trim().parse::<i32>() {
+            if let Ok(parsed_int) = filter_query.trim().parse::<i32>() {
                 // user selects a command to run
                 let parsed_uint: usize = parsed_int as usize;
                 let entire_line = last_lines[parsed_uint].clone();
@@ -142,7 +140,7 @@ fn main() -> io::Result<()> {
                 break;
             } else {
                 // user filters from the list of commands
-                tokenize_and_filter(&filterQuery, &mut last_lines);
+                tokenize_and_filter(&filter_query, &mut last_lines);
 
                 println!("{} Relevant results found:", last_lines.len());
                 for (index, line) in last_lines.iter().enumerate() {
