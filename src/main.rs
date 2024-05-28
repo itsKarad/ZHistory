@@ -86,8 +86,9 @@ fn main() -> io::Result<()> {
     last_lines.reverse();
     if args.stats {
         let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
-        println!("Top 10 most used commands: ");
-        for (cmd, count) in unique_commands.iter().take(10) {
+        let top_cmds = 10;
+        println!("Top {} most used commands: ", top_cmds);
+        for (cmd, count) in unique_commands.iter().take(top_cmds) {
             println!("{}: {}", cmd, count);
         }
     } else {
