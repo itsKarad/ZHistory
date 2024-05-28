@@ -4,6 +4,7 @@ use dirs::home_dir;
 use regex::escape;
 use regex::Regex;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
@@ -16,11 +17,11 @@ use std::path::PathBuf;
 #[command(about = "Command line history tool", long_about = None)]
 struct Cli {
     // number of lines to read
-    #[arg(short, long, default_value = "5")]
-    lines: usize,
+    #[arg(short, long)]
+    lines: Option<usize>,
 
     // string to search
-    #[arg(short, long, default_value = "")]
+    #[arg(short, long)]
     search: Option<String>,
 
     // take history upto a day
@@ -30,6 +31,10 @@ struct Cli {
     // take history upto a month
     #[arg(long, default_value = "false")]
     month: bool,
+
+    // print unique commands
+    #[arg(long, default_value = "false")]
+    stats: bool,
 }
 
 // struct HistoryItem {
@@ -39,8 +44,16 @@ struct Cli {
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
+    // Ensure that either day or month is true, but not both
+    if args.day && args.month {
+        eprintln!("Error: Either --day or --month must be true, but not both.");
+        std::process::exit(1);
+    }
+    if args.stats && args.search.is_some() {
+        eprintln!("Error: --stats cannot be used with --search.");
+        std::process::exit(1);
+    }
     // Open the file in read-only mode
-    println!("Reading the last {} lines from history file", args.lines);
     let history_file_path: PathBuf = match get_history_file_path() {
         Some(path) => path,
         None => {
@@ -53,27 +66,39 @@ fn main() -> io::Result<()> {
 
     // Create a buffered reader
     let reader: BufReader<File> = BufReader::new(file);
+    let lines_to_read: usize = args.lines.unwrap_or(usize::MAX);
+    println!("Reading the last {} lines from history file", lines_to_read);
     let mut line_number = 1;
+    let search = args.search.clone().unwrap_or("".to_string()); // Clone the search value
     let mut lines: Vec<String> = reader
         .lines()
-        .filter_map(|line_result| process_line(line_result, &args, &mut line_number))
+        .filter_map(|line_result| {
+            process_line(line_result, &args, Some(search.clone()), &mut line_number)
+            // Pass the cloned search value
+        })
         .collect();
 
     // Get the specified number of lines from the end
-    let num_lines: usize = min(args.lines, lines.len());
+    let num_lines: usize = min(lines_to_read, lines.len());
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
     last_lines.reverse();
+    if args.stats {
+        let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
+        println!("Top 10 most used commands: ");
+        for (cmd, count) in unique_commands.iter().take(10) {
+            println!("{}: {}", cmd, count);
+        }
+    } else {
+        let mut i = 0;
 
-    let mut i = 0;
-
-    // Print the lines
-    for line in last_lines {
-        println!("{}: {}", i, line);
-        i += 1;
+        // Print the lines
+        for line in last_lines {
+            println!("{}: {}", i, line);
+            i += 1;
+        }
     }
-
     Ok(())
 }
 
@@ -137,17 +162,41 @@ fn match_regex(line: &str, search: &Option<String>) -> bool {
     false
 }
 
+fn extract_unique_commands(line: &str, delimiter: char, unique_cmds: &mut HashMap<String, usize>) {
+    let split_line: Vec<&str> = line.split(delimiter).collect();
+    let cmd = split_line[1];
+    let cmds: Vec<&str> = cmd.split_whitespace().take(2).collect();
+    for cmd in cmds {
+        if let Some(count) = unique_cmds.get_mut(cmd) {
+            *count += 1;
+        } else {
+            unique_cmds.insert(cmd.to_string(), 1);
+        }
+    }
+}
+
+fn process_cmds(line_result: Vec<String>, delimiter: char) -> Vec<(String, usize)> {
+    let mut unique_cmds: HashMap<String, usize> = HashMap::new();
+    for line in line_result {
+        extract_unique_commands(&line, delimiter, &mut unique_cmds);
+    }
+    let mut sorted_sequences: Vec<(String, usize)> = unique_cmds.into_iter().collect();
+    sorted_sequences.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_sequences
+}
+
 fn process_line(
     line_result: Result<String, io::Error>,
     args: &Cli,
+    search: Option<String>,
     line_number: &mut usize,
 ) -> Option<String> {
     match line_result {
         Ok(bytes) => {
             *line_number += 1;
             let line = String::from_utf8_lossy(bytes.as_bytes()).into_owned();
-
-            if match_regex(&line, &args.search) {
+            let s = Some(search);
+            if match_regex(&line, s.as_ref().unwrap()) {
                 if let Some(timestamp) = parse_timestamp(&line) {
                     // Parse the timestamp string to an integer
                     if (args.day && is_within_one_day(timestamp))
