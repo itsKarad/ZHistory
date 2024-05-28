@@ -1,5 +1,6 @@
 use chrono::Local;
 use clap::Parser;
+use clipboard::{ClipboardContext, ClipboardProvider};
 use dirs::home_dir;
 use regex::escape;
 use regex::Regex;
@@ -37,10 +38,17 @@ struct Cli {
     stats: bool,
 }
 
-// struct HistoryItem {
-//     command: String,
-//     timestamp: i64,
-// }
+fn tokenize_and_filter(filter: &str, words: &mut Vec<&mut String>) {
+    let tokens: Vec<String> = filter
+        .split_whitespace()
+        .map(|s| s.to_lowercase())
+        .collect();
+
+    words.retain(|word| {
+        let lower_word = word.to_lowercase();
+        tokens.iter().any(|token| lower_word.contains(token))
+    });
+}
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
@@ -83,6 +91,8 @@ fn main() -> io::Result<()> {
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
+    let mut last_lines: Vec<_> = last_lines.into_iter().collect();
+
     last_lines.reverse();
     if args.stats {
         let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
@@ -95,9 +105,50 @@ fn main() -> io::Result<()> {
         let mut i = 0;
 
         // Print the lines
-        for line in last_lines {
+        for line in &last_lines {
             println!("{}: {}", i, line);
             i += 1;
+        }
+
+        while (true) {
+            // take filter input
+            let mut filterQuery = String::new();
+            io::stdin()
+                .read_line(&mut filterQuery)
+                .expect("Failed to read line");
+
+            println!("Query received: {}", filterQuery);
+            if filterQuery.trim().to_lowercase() == "q"
+                || filterQuery.trim().to_lowercase() == "exit"
+                || filterQuery.trim().to_lowercase() == "quit"
+            {
+                break;
+            }
+
+            if let Ok(parsed_int) = filterQuery.trim().parse::<i32>() {
+                // user selects a command to run
+                let parsed_uint: usize = parsed_int as usize;
+                let entire_line = last_lines[parsed_uint].clone();
+                let parts: Vec<&str> = entire_line.split(';').collect();
+
+                if let Some(commmand_str) = parts.get(1) {
+                    let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+                    ctx.set_contents(commmand_str.to_string()).unwrap();
+                    println!("📋 Copied into your clipboard!");
+                    break;
+                } else {
+                    eprintln!("❌ Error: command not found in the input string");
+                }
+                break;
+            } else {
+                // user filters from the list of commands
+                tokenize_and_filter(&filterQuery, &mut last_lines);
+
+                println!("{} Relevant results found:", last_lines.len());
+                for (index, line) in last_lines.iter().enumerate() {
+                    println!("{}: {}", index, line);
+                }
+            }
         }
     }
     Ok(())
