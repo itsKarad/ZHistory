@@ -10,6 +10,8 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
+use colored::Colorize;
+
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -104,7 +106,7 @@ fn main() -> io::Result<()> {
         let mut last_lines: Vec<_> = last_lines.into_iter().collect();
         // Print the lines
         for line in last_lines.iter() {
-            println!("{}: {}", i, get_command(line, ';').unwrap());
+            println!("{}: {}", i.to_string().blue(), get_command(line, ';').unwrap());
             i -= 1;
         }
 
@@ -147,7 +149,7 @@ fn main() -> io::Result<()> {
                 println!("{} Relevant results found:", last_lines.len());
                 let mut i = last_lines.len() as i32 - 1;
                 for line in last_lines.iter() {
-                    println!("{}: {}", i, get_command(line, ';').unwrap());
+                    println!("{}: {}", i.to_string().blue(), get_command(line, ';').unwrap());
                     i -= 1;
                 }
             }
