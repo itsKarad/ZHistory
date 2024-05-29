@@ -215,9 +215,14 @@ fn match_regex(line: &str, search: &Option<String>) -> bool {
     false
 }
 
-fn extract_unique_commands(line: &str, delimiter: char, unique_cmds: &mut HashMap<String, usize>) {
+fn get_command(line: &str, delimiter: char) -> Option<String> {
     let split_line: Vec<&str> = line.split(delimiter).collect();
     let cmd = split_line[1];
+    Some(cmd.to_string())
+}
+
+fn extract_unique_commands(line: &str, delimiter: char, unique_cmds: &mut HashMap<String, usize>) {
+    let cmd = get_command(line, delimiter).unwrap();
     let cmds: Vec<&str> = cmd.split_whitespace().take(2).collect();
     for cmd in cmds {
         if let Some(count) = unique_cmds.get_mut(cmd) {
