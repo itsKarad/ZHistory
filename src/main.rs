@@ -26,11 +26,11 @@ struct Cli {
     search: Option<String>,
 
     // take history upto a day
-    #[arg(long, default_value = "false")]
+    #[arg(short, long, default_value = "false")]
     day: bool,
 
     // take history upto a month
-    #[arg(long, default_value = "false")]
+    #[arg(short, long, default_value = "false")]
     month: bool,
 
     // print unique commands
@@ -74,8 +74,8 @@ fn main() -> io::Result<()> {
 
     // Create a buffered reader
     let reader: BufReader<File> = BufReader::new(file);
-    let lines_to_read: usize = args.lines.unwrap_or(usize::MAX);
-    println!("Reading the last {} lines from history file", lines_to_read);
+    let lines_to_read: usize = args.lines.unwrap_or(100 as usize);
+    // println!("Reading the last {} lines from history file", lines_to_read);
     let mut line_number = 1;
     let search = args.search.clone().unwrap_or("".to_string()); // Clone the search value
     let mut lines: Vec<String> = reader
@@ -100,11 +100,11 @@ fn main() -> io::Result<()> {
             println!("{}: {}", cmd, count);
         }
     } else {
-        let mut i = last_lines.len() as i32 -1;
+        let mut i = last_lines.len() as i32 - 1;
         let mut last_lines: Vec<_> = last_lines.into_iter().collect();
         // Print the lines
         for line in last_lines.iter() {
-            println!("{}: {}", i, line);
+            println!("{}: {}", i, get_command(line, ';').unwrap());
             i -= 1;
         }
 
@@ -144,9 +144,9 @@ fn main() -> io::Result<()> {
                 tokenize_and_filter(&filter_query, &mut last_lines);
 
                 println!("{} Relevant results found:", last_lines.len());
-                let mut i = last_lines.len() as i32 -1;
+                let mut i = last_lines.len() as i32 - 1;
                 for line in last_lines.iter() {
-                    println!("{}: {}", i, line);
+                    println!("{}: {}", i, get_command(line, ';').unwrap());
                     i -= 1;
                 }
             }
@@ -161,8 +161,6 @@ fn get_history_file_path() -> Option<std::path::PathBuf> {
 
     if shell.contains("zsh") {
         Some(home_dir.join(".zsh_history"))
-    } else if shell.contains("bash") {
-        Some(home_dir.join(".bash_history"))
     } else {
         println!("Unsupported shell: {}", shell);
         None
