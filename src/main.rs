@@ -110,6 +110,7 @@ fn main() -> io::Result<()> {
 
         loop {
             // take filter input
+            println!("Enter the command number to copy to clipboard or keywords to filter the list (q to quit):");
             let mut filter_query = String::new();
             io::stdin()
                 .read_line(&mut filter_query)
