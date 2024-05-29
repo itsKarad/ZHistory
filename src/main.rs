@@ -1,6 +1,7 @@
 use chrono::Local;
 use clap::Parser;
 use clipboard::{ClipboardContext, ClipboardProvider};
+use colored::Colorize;
 use dirs::home_dir;
 use regex::escape;
 use regex::Regex;
@@ -10,8 +11,6 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
-use colored::Colorize;
-
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -75,8 +74,15 @@ fn main() -> io::Result<()> {
     let file: File = File::open(&history_file_path)?;
 
     // Create a buffered reader
+    let lines_to_read: usize;
     let reader: BufReader<File> = BufReader::new(file);
-    let lines_to_read: usize = args.lines.unwrap_or(100 as usize);
+    if args.lines != None {
+        lines_to_read = args.lines.unwrap();
+    } else if args.day || args.month || args.stats {
+        lines_to_read = usize::MAX;
+    } else {
+        lines_to_read = 100 as usize;
+    }
     // println!("Reading the last {} lines from history file", lines_to_read);
     let mut line_number = 1;
     let search = args.search.clone().unwrap_or("".to_string()); // Clone the search value
@@ -106,7 +112,11 @@ fn main() -> io::Result<()> {
         let mut last_lines: Vec<_> = last_lines.into_iter().collect();
         // Print the lines
         for line in last_lines.iter() {
-            println!("{}: {}", i.to_string().blue(), get_command(line, ';').unwrap());
+            println!(
+                "{}: {}",
+                i.to_string().blue(),
+                get_command(line, ';').unwrap()
+            );
             i -= 1;
         }
 
@@ -149,7 +159,11 @@ fn main() -> io::Result<()> {
                 println!("{} Relevant results found:", last_lines.len());
                 let mut i = last_lines.len() as i32 - 1;
                 for line in last_lines.iter() {
-                    println!("{}: {}", i.to_string().blue(), get_command(line, ';').unwrap());
+                    println!(
+                        "{}: {}",
+                        i.to_string().blue(),
+                        get_command(line, ';').unwrap()
+                    );
                     i -= 1;
                 }
             }
