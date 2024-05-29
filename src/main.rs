@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// Simple program to greet a person
 #[derive(Parser)]
 #[command(name = "zhistory")]
-#[command(version = "1.0")]
+#[command(version = "0.1.0")]
 #[command(about = "Command line history tool", long_about = None)]
 struct Cli {
     // number of lines to read
@@ -139,6 +139,10 @@ fn main() -> io::Result<()> {
             if let Ok(parsed_int) = filter_query.trim().parse::<i32>() {
                 // user selects a command to run
                 let mut parsed_uint: usize = parsed_int as usize;
+                if parsed_uint >= last_lines.len() {
+                    eprintln!("❌ Error: command number out of range");
+                    continue;
+                }
                 parsed_uint = last_lines.len() - 1 - parsed_uint;
                 let entire_line = last_lines[parsed_uint].clone();
                 let parts: Vec<&str> = entire_line.split(';').collect();
