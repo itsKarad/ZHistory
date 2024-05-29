@@ -1,15 +1,16 @@
 use chrono::Local;
 use clap::Parser;
+use clipboard::{ClipboardContext, ClipboardProvider};
+use colored::Colorize;
 use dirs::home_dir;
 use regex::escape;
 use regex::Regex;
 use std::cmp::min;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
-use clipboard::{ClipboardContext, ClipboardProvider};
-
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -18,38 +19,50 @@ use clipboard::{ClipboardContext, ClipboardProvider};
 #[command(about = "Command line history tool", long_about = None)]
 struct Cli {
     // number of lines to read
-    #[arg(short, long, default_value = "100")]
-    lines: usize,
+    #[arg(short, long)]
+    lines: Option<usize>,
 
     // string to search
-    #[arg(short, long, default_value = "")]
+    #[arg(short, long)]
     search: Option<String>,
 
     // take history upto a day
-    #[arg(long, default_value = "false")]
+    #[arg(short, long, default_value = "false")]
     day: bool,
 
     // take history upto a month
-    #[arg(long, default_value = "false")]
+    #[arg(short, long, default_value = "false")]
     month: bool,
+
+    // print unique commands
+    #[arg(long, default_value = "false")]
+    stats: bool,
 }
 
 fn tokenize_and_filter(filter: &str, words: &mut Vec<&mut String>) {
-    let tokens: Vec<String> = filter.split_whitespace()
+    let tokens: Vec<String> = filter
+        .split_whitespace()
         .map(|s| s.to_lowercase())
         .collect();
-    
+
     words.retain(|word| {
         let lower_word = word.to_lowercase();
         tokens.iter().any(|token| lower_word.contains(token))
     });
-    
 }
 
 fn main() -> io::Result<()> {
     let args: Cli = Cli::parse();
+    // Ensure that either day or month is true, but not both
+    if args.day && args.month {
+        eprintln!("Error: Either --day or --month must be true, but not both.");
+        std::process::exit(1);
+    }
+    if args.stats && args.search.is_some() {
+        eprintln!("Error: --stats cannot be used with --search.");
+        std::process::exit(1);
+    }
     // Open the file in read-only mode
-    println!("Reading the last {} lines from history file", args.lines);
     let history_file_path: PathBuf = match get_history_file_path() {
         Some(path) => path,
         None => {
@@ -61,70 +74,101 @@ fn main() -> io::Result<()> {
     let file: File = File::open(&history_file_path)?;
 
     // Create a buffered reader
+    let lines_to_read: usize;
     let reader: BufReader<File> = BufReader::new(file);
+    if args.lines != None {
+        lines_to_read = args.lines.unwrap();
+    } else if args.day || args.month || args.stats {
+        lines_to_read = usize::MAX;
+    } else {
+        lines_to_read = 100 as usize;
+    }
+    // println!("Reading the last {} lines from history file", lines_to_read);
     let mut line_number = 1;
+    let search = args.search.clone().unwrap_or("".to_string()); // Clone the search value
     let mut lines: Vec<String> = reader
         .lines()
-        .filter_map(|line_result| process_line(line_result, &args, &mut line_number))
+        .filter_map(|line_result| {
+            process_line(line_result, &args, Some(search.clone()), &mut line_number)
+            // Pass the cloned search value
+        })
         .collect();
 
     // Get the specified number of lines from the end
-    let num_lines: usize = min(args.lines, lines.len());
+    let num_lines: usize = min(lines_to_read, lines.len());
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
-    let mut last_lines: Vec<_> = last_lines
-    .into_iter()
-    .collect();
-
-    last_lines.reverse();
-
-    let mut i = 0;
-
-    // Print the lines
-    for line in &last_lines {
-        println!("{}: {}", i, line);
-        i += 1;
-    }
-
-    while(true){
-        // take filter input
-        let mut filterQuery = String::new();
-        io::stdin()
-            .read_line(&mut filterQuery)
-            .expect("Failed to read line");
-
-        println!("Query received: {}", filterQuery);
-        if filterQuery.trim().to_lowercase() == "q" || filterQuery.trim().to_lowercase() == "exit" || filterQuery.trim().to_lowercase() == "quit" {
-            break;
+    // last_lines.reverse();
+    if args.stats {
+        let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
+        let top_cmds = 10;
+        println!("Top {} most used commands: ", top_cmds);
+        for (cmd, count) in unique_commands.iter().take(top_cmds) {
+            println!("{}: {}", cmd, count);
+        }
+    } else {
+        let mut i = last_lines.len() as i32 - 1;
+        let mut last_lines: Vec<_> = last_lines.into_iter().collect();
+        // Print the lines
+        for line in last_lines.iter() {
+            println!(
+                "{}: {}",
+                i.to_string().blue(),
+                get_command(line, ';').unwrap()
+            );
+            i -= 1;
         }
 
-        if let Ok(parsed_int) = filterQuery.trim().parse::<i32>() {
-            // user selects a command to run
-            let parsed_uint: usize = parsed_int as usize;
-            let entire_line = last_lines[parsed_uint].clone();
-            let parts: Vec<&str> = entire_line.split(';').collect();
+        loop {
+            // take filter input
+            println!("Enter the command number to copy to clipboard or keywords to filter the list (q to quit):");
+            let mut filter_query = String::new();
+            io::stdin()
+                .read_line(&mut filter_query)
+                .expect("Failed to read line");
 
-            if let Some(commmand_str) = parts.get(1) {
-                let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-                ctx.set_contents(commmand_str.to_string()).unwrap();
-                println!("📋 Copied into your clipboard!");
+            println!("Query received: {}", filter_query);
+            if filter_query.trim().to_lowercase() == "q"
+                || filter_query.trim().to_lowercase() == "exit"
+                || filter_query.trim().to_lowercase() == "quit"
+            {
+                break;
+            }
+
+            if let Ok(parsed_int) = filter_query.trim().parse::<i32>() {
+                // user selects a command to run
+                let mut parsed_uint: usize = parsed_int as usize;
+                parsed_uint = last_lines.len() - 1 - parsed_uint;
+                let entire_line = last_lines[parsed_uint].clone();
+                let parts: Vec<&str> = entire_line.split(';').collect();
+
+                if let Some(commmand_str) = parts.get(1) {
+                    let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
+                    ctx.set_contents(commmand_str.to_string()).unwrap();
+                    println!("📋 Copied into your clipboard!");
+                    break;
+                } else {
+                    eprintln!("❌ Error: command not found in the input string");
+                }
                 break;
             } else {
-                eprintln!("❌ Error: command not found in the input string");
-            }
-            break;
-        } else {
-            // user filters from the list of commands
-            tokenize_and_filter(&filterQuery, &mut last_lines);
+                // user filters from the list of commands
+                tokenize_and_filter(&filter_query, &mut last_lines);
 
-            println!("{} Relevant results found:", last_lines.len());
-            for (index, line) in last_lines.iter().enumerate() {
-                println!("{}: {}", index, line);
+                println!("{} Relevant results found:", last_lines.len());
+                let mut i = last_lines.len() as i32 - 1;
+                for line in last_lines.iter() {
+                    println!(
+                        "{}: {}",
+                        i.to_string().blue(),
+                        get_command(line, ';').unwrap()
+                    );
+                    i -= 1;
+                }
             }
         }
     }
-    
     Ok(())
 }
 
@@ -134,8 +178,6 @@ fn get_history_file_path() -> Option<std::path::PathBuf> {
 
     if shell.contains("zsh") {
         Some(home_dir.join(".zsh_history"))
-    } else if shell.contains("bash") {
-        Some(home_dir.join(".bash_history"))
     } else {
         println!("Unsupported shell: {}", shell);
         None
@@ -164,10 +206,10 @@ fn parse_timestamp(line: &str) -> Option<i64> {
         if let Ok(timestamp) = timestamp_str.trim().parse::<i64>() {
             return Some(timestamp);
         } else {
-            eprintln!("Error: Unable to parse timestamp");
+            // eprintln!("Error: Unable to parse timestamp");
         }
     } else {
-        eprintln!("Error: Timestamp not found in the input string");
+        // eprintln!("Error: Timestamp not found in the input string");
     }
     None
 }
@@ -188,35 +230,62 @@ fn match_regex(line: &str, search: &Option<String>) -> bool {
     false
 }
 
+fn get_command(line: &str, delimiter: char) -> Option<String> {
+    let split_line: Vec<&str> = line.split(delimiter).collect();
+    let cmd = split_line[1];
+    Some(cmd.to_string())
+}
+
+fn extract_unique_commands(line: &str, delimiter: char, unique_cmds: &mut HashMap<String, usize>) {
+    let cmd = get_command(line, delimiter).unwrap();
+    let cmds: Vec<&str> = cmd.split_whitespace().take(2).collect();
+    for cmd in cmds {
+        if let Some(count) = unique_cmds.get_mut(cmd) {
+            *count += 1;
+        } else {
+            unique_cmds.insert(cmd.to_string(), 1);
+        }
+    }
+}
+
+fn process_cmds(line_result: Vec<String>, delimiter: char) -> Vec<(String, usize)> {
+    let mut unique_cmds: HashMap<String, usize> = HashMap::new();
+    for line in line_result {
+        extract_unique_commands(&line, delimiter, &mut unique_cmds);
+    }
+    let mut sorted_sequences: Vec<(String, usize)> = unique_cmds.into_iter().collect();
+    sorted_sequences.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_sequences
+}
+
 fn process_line(
     line_result: Result<String, io::Error>,
     args: &Cli,
+    search: Option<String>,
     line_number: &mut usize,
 ) -> Option<String> {
     match line_result {
         Ok(bytes) => {
             *line_number += 1;
             let line = String::from_utf8_lossy(bytes.as_bytes()).into_owned();
-
-            if match_regex(&line, &args.search) {
+            let s = Some(search);
+            if match_regex(&line, s.as_ref().unwrap()) {
                 if let Some(timestamp) = parse_timestamp(&line) {
                     // Parse the timestamp string to an integer
                     if (args.day && is_within_one_day(timestamp))
                         || (args.month && is_within_one_day(timestamp))
                     {
-                        println!("Timestamp: {}", timestamp);
                         return Some(line);
                     } else if args.month && is_within_one_month(timestamp) {
-                        println!("Timestamp: {}", timestamp);
                         return Some(line);
                     } else if !args.day && !args.month {
                         return Some(line);
                     }
                 } else {
-                    eprintln!("Error: Timestamp not found in the input string");
+                    // eprintln!("Error: Timestamp not found in the input string");
+                    return None;
                 }
-
-                Some(line)
+                None
             } else {
                 None
             }

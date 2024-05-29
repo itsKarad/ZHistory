@@ -2,6 +2,7 @@
 name = "zhistory"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
@@ -9,3 +10,4 @@ regex = "1.5"
 dirs = "4.0"
 chrono = "0.4"
 clipboard = "0.5.0"
+colored = "2.1.0"
