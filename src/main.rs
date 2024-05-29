@@ -262,8 +262,7 @@ fn process_line(
                     // eprintln!("Error: Timestamp not found in the input string");
                     return None;
                 }
-
-                Some(line)
+                None
             } else {
                 None
             }
