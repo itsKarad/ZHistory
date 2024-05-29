@@ -91,7 +91,7 @@ fn main() -> io::Result<()> {
     let start_index: usize = lines.len().saturating_sub(num_lines);
     let last_lines: &mut [String] = &mut lines[start_index..];
 
-    last_lines.reverse();
+    // last_lines.reverse();
     if args.stats {
         let unique_commands: Vec<(String, usize)> = process_cmds(last_lines.to_vec(), ';');
         let top_cmds = 10;
@@ -100,12 +100,12 @@ fn main() -> io::Result<()> {
             println!("{}: {}", cmd, count);
         }
     } else {
-        let mut i = 0;
+        let mut i = last_lines.len() as i32 -1;
         let mut last_lines: Vec<_> = last_lines.into_iter().collect();
         // Print the lines
-        for line in &last_lines {
+        for line in last_lines.iter() {
             println!("{}: {}", i, line);
-            i += 1;
+            i -= 1;
         }
 
         loop {
@@ -125,7 +125,8 @@ fn main() -> io::Result<()> {
 
             if let Ok(parsed_int) = filter_query.trim().parse::<i32>() {
                 // user selects a command to run
-                let parsed_uint: usize = parsed_int as usize;
+                let mut parsed_uint: usize = parsed_int as usize;
+                parsed_uint = last_lines.len() - 1 - parsed_uint;
                 let entire_line = last_lines[parsed_uint].clone();
                 let parts: Vec<&str> = entire_line.split(';').collect();
 
@@ -143,8 +144,10 @@ fn main() -> io::Result<()> {
                 tokenize_and_filter(&filter_query, &mut last_lines);
 
                 println!("{} Relevant results found:", last_lines.len());
-                for (index, line) in last_lines.iter().enumerate() {
-                    println!("{}: {}", index, line);
+                let mut i = last_lines.len() as i32 -1;
+                for line in last_lines.iter() {
+                    println!("{}: {}", i, line);
+                    i -= 1;
                 }
             }
         }
